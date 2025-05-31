@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWISubscribe
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.2
 // @description  Subscribe Market Item
 // @author       Lhiok
 // @license      MIT
@@ -152,7 +152,7 @@
             const lastValue = filterInput.value;
             const event = new Event("input", { bubbles: true });
             event.simulated = true;
-            filterInput.value = `^(${subscribeItems.join("|")})$`;
+            filterInput.value = `^(${subscribeItems.join("|").replaceAll("(", "\\(").replaceAll(")", "\\)").replaceAll(" ", "\\s*")})$`;
             filterInput._valueTracker && filterInput._valueTracker.setValue(lastValue);
             filterInput.dispatchEvent(new Event("input", { bubbles: true }));
         });
