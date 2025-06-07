@@ -1,26 +1,56 @@
 // ==UserScript==
 // @name         MWISubscribe
 // @namespace    http://tampermonkey.net/
-// @version      0.2
+// @version      0.3
 // @description  Subscribe Market Item
 // @author       Lhiok
 // @license      MIT
 // @match        https://www.milkywayidle.com/*
 // @match        https://test.milkywayidle.com/*
 // @icon         https://www.milkywayidle.com/favicon.svg
-// @grant        GM_addStyle
-// @grant        GM_getValue
-// @grant        GM_setValue
+// @supportURL   https://github.com/Lhiok/MWIScript/
+// @grant        none
 // ==/UserScript==
 
 (function() {
     "use strict";
 
-    let subscribeItems = [];
-
-    const subscribeItemsStorage = GM_getValue("subscribe_items");
+    let mwi_common = null;
+    let mwi_subscribe_items = [];
+    const storage_key = "mwi_subscribe_items";
+    const subscribeItemsStorage = localStorage.getItem(storage_key);
     if (subscribeItemsStorage) {
-        subscribeItems = JSON.parse(subscribeItemsStorage);
+        mwi_subscribe_items = JSON.parse(subscribeItemsStorage);
+    }
+
+    function updateSubscribedList() {
+        const displayContainer = document.querySelector("div#displayContainer141");
+        if (!displayContainer) {
+            return;
+        }
+        
+        // 移除收藏物品
+        displayContainer.innerHTML = "";
+        // 创建收藏物品
+        mwi_subscribe_items.forEach(itemHrid => {
+            const item = document.createElement("div");
+            item.setAttribute("class", "Item_itemContainer__x7kH1");
+            item.innerHTML = `<div>
+                <div class="Item_item__2De2O Item_clickable__3viV6" style="position: relative;">
+                    <div class="Item_iconContainer__5z7j4">
+                        <svg role="img" aria-label="${mwi_common.getItemNameByHrid(itemHrid, mwi_common.isZh)}" class="Icon_icon__2LtL_" width="100%" height="100%">
+                            <use href="/static/media/items_sprite.6d12eb9d.svg#${itemHrid.substr(7)}"></use>
+                        </svg>
+                    </div>
+                </div>
+            </div>`;
+            displayContainer.appendChild(item);
+            // 物品点击事件
+            item.addEventListener("click", function() {
+                console.info(`[MWISubscribe] goto ${itemHrid}`);
+                mwi_common.gotoMarket(itemHrid, 0); 
+            });
+        });
     }
 
     function createSubscribeButton(marketPanel) {
@@ -39,122 +69,107 @@
             return;
         }
 
-        // modify displayContainer
-        displayContainer.style.position = "relative";
-        displayContainer.style.marginRight = "auto";
+        const itemHrid = mwi_common.getItemHridByName(itemName);
+        if (!itemHrid || itemHrid === "") {
+            return;
+        }
+
+        const btnList = marketPanel.querySelector(".MarketplacePanel_marketNavButtonContainer__2QI9I");
+        if (!btnList) {
+            return;
+        }
+
+        let isSubscribed = mwi_subscribe_items.includes(itemHrid);
         
-        // create SubscribeButton
+        // 创建收藏按钮
         const subscribeButton = document.createElement("button");
+        subscribeButton.setAttribute("class", "Button_button__1Fe9z");
         subscribeButton.setAttribute("id", "SubscribeButton141");
-        subscribeButton.className = "subscribe-btn";
-        subscribeButton.style.cssText = `
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 24px;
-            height: 24px;
-            padding: 0;
-            background: none;
-            border: none;
-            cursor: pointer;
-            outline: none;
-            z-index: 2; /** make sure it's on top of the item level div created by MWITools */
-        `;
+        subscribeButton.innerText = isSubscribed ? "取消收藏" : "添加收藏";
+        btnList.appendChild(subscribeButton);
         
-        // create SVG
-        const svgNS = "http://www.w3.org/2000/svg";
-        const svg = document.createElementNS(svgNS, "svg");
-        svg.setAttribute("viewBox", "0 0 24 24");
-        svg.setAttribute("width", "24");
-        svg.setAttribute("height", "24");
-        
-        // create heart unsubscribed
-        const heartUnsubscribed = document.createElementNS(svgNS, "path");
-        heartUnsubscribed.setAttribute("d", "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z");
-        heartUnsubscribed.setAttribute("fill", "#aaaaaa");
-        heartUnsubscribed.setAttribute("stroke", "#333");
-        heartUnsubscribed.setAttribute("transition", "all 0.3s");
-        
-        // create path subscribed
-        const heartSubscribed = document.createElementNS(svgNS, "path");
-        heartSubscribed.setAttribute("d", "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z");
-        heartSubscribed.setAttribute("fill", "#ff4d4f");
-        heartSubscribed.setAttribute("opacity", "0");
-        heartSubscribed.setAttribute("transition", "opacity 0.3s");
-        
-        // use SVG
-        svg.appendChild(heartUnsubscribed);
-        svg.appendChild(heartSubscribed);
-        subscribeButton.appendChild(svg);
-        displayContainer.appendChild(subscribeButton);
-        
-        let isSubscribed = subscribeItems.includes(itemName);
-        const updateSubscribedButton = function() {
-            if (isSubscribed) {
-                heartUnsubscribed.setAttribute("stroke", "#ff4d4f");
-                heartSubscribed.setAttribute("opacity", "1");
-            } else {
-                heartUnsubscribed.setAttribute("stroke", "#333");
-                heartSubscribed.setAttribute("opacity", "0");
-            }
-        };
-        
-        // init view
-        updateSubscribedButton(isSubscribed);
-        // add event
+        // 绑定点击
         subscribeButton.addEventListener("click", function() {
             isSubscribed = !isSubscribed;
-            updateSubscribedButton();
 
             if (isSubscribed) {
-                subscribeItems.push(itemName);
+                console.info("[MWISubscribe] add item " + itemHrid);
+                subscribeButton.innerText = "取消收藏";
+                mwi_subscribe_items.push(itemHrid);
             }
             else {
-                const idx = subscribeItems.indexOf(itemName);
+                console.info("[MWISubscribe] remove item " + itemHrid);
+                subscribeButton.innerText = "添加收藏";
+                const idx = mwi_subscribe_items.indexOf(itemHrid);
                 if (~idx) {
-                    subscribeItems[idx] = subscribeItems[subscribeItems.length - 1];
-                    --subscribeItems.length;
+                    mwi_subscribe_items[idx] = mwi_subscribe_items[mwi_subscribe_items.length - 1];
+                    --mwi_subscribe_items.length;
                 }
             }
-            GM_setValue("subscribe_items", JSON.stringify(subscribeItems));
+            localStorage.setItem(storage_key, JSON.stringify(mwi_subscribe_items));
+            updateSubscribedList();
         });
     }
 
     function createDisplayButton(marketPanel) {
-        const filterContainer = marketPanel.querySelector(".MarketplacePanel_itemFilterContainer__3F3td");
-        if (!filterContainer) {
+        const tabPanelContainer = marketPanel.querySelector(".TabsComponent_tabPanelsContainer__26mzo");
+        if (!tabPanelContainer) {
             return;
         }
 
-        // modify filterContainer
-        filterContainer.style.display = "flex";
-        filterContainer.style.flexDirection = "row";
-        filterContainer.style.gap = "20px";
+        const tabList = tabPanelContainer.querySelector("[role=tablist]");
+        const panelList = tabPanelContainer.querySelector(".TabsComponent_tabPanelsContainer__26mzo");
+        if (!tabList || !panelList) {
+            return;
+        }
         
-        // create displayButton
+        // 创建收藏按钮
         const displayButton = document.createElement("button");
-        displayButton.setAttribute("style", "margin-left: 20px; border-radius: 3px; background-color: orange; color: black; white-space: nowrap;");
+        displayButton.setAttribute("class", "MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1q2h7u5");
+        displayButton.setAttribute("tabindex", -1);
+        displayButton.setAttribute("role", "tab");
+        displayButton.setAttribute("aria-selected", false);
         displayButton.setAttribute("id", "displayButton141");
-        displayButton.textContent = "查看收藏";
-        filterContainer.appendChild(displayButton);
+        displayButton.textContent = "收藏";
+        tabList.appendChild(displayButton);
 
-        // add event
-        displayButton.addEventListener("click", function () {
-            if (!subscribeItems.length) {
-                return;
-            }
-            
-            const filterInput = filterContainer.querySelector(".Input_input__2-t98");
-            if (!filterInput) {
-                return;
-            }
-            
-            const lastValue = filterInput.value;
-            const event = new Event("input", { bubbles: true });
-            event.simulated = true;
-            filterInput.value = `^(${subscribeItems.join("|").replaceAll("(", "\\(").replaceAll(")", "\\)").replaceAll(" ", "\\s*")})$`;
-            filterInput._valueTracker && filterInput._valueTracker.setValue(lastValue);
-            filterInput.dispatchEvent(new Event("input", { bubbles: true }));
+        // 创建收藏面板
+        const displayPanel = document.createElement("div");
+        displayPanel.setAttribute("class", "TabPanel_tabPanel__tXMJF TabPanel_hidden__26UM3");
+        panelList.appendChild(displayPanel);
+        // 创建收藏容器
+        const displayContainer = document.createElement("div");
+        displayContainer.setAttribute("class", "MarketplacePanel_marketItems__D4k7e");
+        displayContainer.setAttribute("id", "displayContainer141");
+        displayPanel.appendChild(displayContainer);
+        updateSubscribedList();
+
+        // 设置按钮点击事件
+        tabList.childNodes.forEach((childBtn, btnIdx) => {
+            childBtn.addEventListener("click", function() {
+                // 按钮样式更改
+                tabList.childNodes.forEach(otherBtn => {
+                    if (otherBtn === childBtn) {
+                        otherBtn.setAttribute("class", "MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary Mui-selected css-1q2h7u5");
+                        otherBtn.setAttribute("tabindex", 0);
+                        otherBtn.setAttribute("aria-selected", true);
+                    }
+                    else {
+                        otherBtn.setAttribute("class", "MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1q2h7u5");
+                        otherBtn.setAttribute("tabindex", -1);
+                        otherBtn.setAttribute("aria-selected", false);
+                    }
+                });
+                // 面板样式更改
+                panelList.childNodes.forEach((otherPanel, panelIdx) => {
+                    if (panelIdx === btnIdx) {
+                        otherPanel.setAttribute("class", "TabPanel_tabPanel__tXMJF");
+                    }
+                    else {
+                        otherPanel.setAttribute("class", "TabPanel_tabPanel__tXMJF TabPanel_hidden__26UM3");
+                    }
+                });
+            });
         });
     }
 
@@ -171,5 +186,16 @@
         displayButton || createDisplayButton(marketPanel);
     }
 
-    setInterval(addButton, 500);
+    function start() {
+        console.info("[MWISubscribe] start");
+        mwi_common = window.mwi_common;
+        setInterval(addButton, 500);
+    }
+
+    if (window.mwi_common) start();
+    else {
+        console.info("[MWISubscribe] waiting for mwi_common");
+        document.addEventListener("mwi_common_injected", start);
+    }
+
 })();
