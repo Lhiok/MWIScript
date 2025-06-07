@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWICommon
 // @namespace    http://tampermonkey.net/
-// @version      0.2
+// @version      0.3
 // @description  Common API for MWIScript
 // @author       Lhiok
 // @license      MIT
@@ -91,6 +91,7 @@
         houseRoomsUpdate: "mwi_common_house_rooms_update", // 房屋更新
         actionBuffUpdate: "mwi_common_action_buff_update", // 行动加成更新
         newBattle: "mwi_common_new_battle", // 新一轮战斗 单个EPH算一轮
+        gotoMarket: "mwi_common_goto_market", // 前往市场
     };
 
     // API调用事件
@@ -113,6 +114,7 @@
         ["handleMessageConsumableBuffsUpdated"]: [eventNames.actionBuffUpdate],
         ["handleMessageEquipmentBuffsUpdated"]: [eventNames.actionBuffUpdate],
         ["handleMessageNewBattle"]: [eventNames.newBattle],
+        ["handleGoToMarketplace"]: [eventNames.gotoMarket],
     };
 
     /**

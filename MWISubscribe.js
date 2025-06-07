@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWISubscribe
 // @namespace    http://tampermonkey.net/
-// @version      0.4
+// @version      0.5
 // @description  Subscribe Market Item
 // @author       Lhiok
 // @license      MIT
@@ -118,6 +118,11 @@
         });
     }
 
+    function removeSubscribeButton() {
+        const subscribeButton = document.querySelector("button#SubscribeButton141");
+        subscribeButton && subscribeButton.remove();
+    }
+
     function createDisplayButton(marketPanel) {
         const tabPanelContainer = marketPanel.querySelector(".TabsComponent_tabPanelsContainer__26mzo");
         if (!tabPanelContainer) {
@@ -196,6 +201,13 @@
     function start() {
         console.info("[MWISubscribe] start");
         mwi_common = window.mwi_common;
+        if (!mwi_common) {
+            console.error("[MWISubscribe] mwi_common not found");
+            return;
+        }
+
+        // 物品链接跳转市场不会销毁界面 手动进行移除
+        document.addEventListener("mwi_common_goto_market", removeSubscribeButton);
         setInterval(addButton, 500);
     }
 
