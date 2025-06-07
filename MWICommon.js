@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWICommon
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.2
 // @description  Common API for MWIScript
 // @author       Lhiok
 // @license      MIT
@@ -33,6 +33,8 @@
 
         addNotification: null, // 添加通知
         openItemDictionary: null, // 打开物品字典
+        openItemToolTip: null, // 打开物品提示
+        closeItemToolTip: null, // 关闭物品提示
         gotoMarket: null, // 打开市场
         goToAction: null, // 前往行动
         goToMonster: null, // 前往打怪
@@ -41,6 +43,10 @@
         getItemHridByName: null, // 通过名称获取物品ID
         getActionHridByName: null, // 通过名称获取行动ID
         getMonsterHridByName: null, // 通过名称获取怪物ID
+
+        getCharacterId: null, // 获取角色ID
+        getEquipmentByLocationHrid: null, // 通过位置获取装备
+        getItemNumByHrid: null, // 通过物品ID获取数量
 
         /**************************************** Private ****************************************/
 
@@ -180,6 +186,49 @@
     mwi_common.openItemDictionary = (itemHrid) => mwi_common.handleGameAPI("handleOpenItemDictionary", itemHrid);
 
     /**
+     * 打开物品提示
+     * @param {string} itemHrid 物品ID
+     * @param {number} itemLevel 物品等级
+     * @param {number} itemCount 物品数量
+     * @param {number} left
+     * @param {number} top
+     * @returns div-node
+     */
+    mwi_common.openItemToolTip = function(itemHrid, itemLevel, itemCount, left, top) {
+        const div = document.createElement("div");
+        div.role = "tooltip";
+        div.setAttribute("id", `mwiCommonItemToolTip${itemHrid}`);
+        div.setAttribute("class", "MuiPopper-root MuiTooltip-popper css-112l0a2");
+        div.style.position = "absolute";
+        div.style.inset = "0px auto auto 0px";
+        div.style.margin = "0px";
+        div.style.transform = `translate3d(${left}px, ${top}px, 0px)`;
+        div.setAttribute("data-popper-placement", "top");
+        div.innerHTML = `<div class="MuiTooltip-tooltip MuiTooltip-tooltipPlacementTop css-1spb1s5" style="opacity: 1; transition: opacity cubic-bezier(0.4, 0, 0.2, 1);"
+            <div class="ItemTooltipText_itemTooltipText__zFq3A">
+                <div class="ItemTooltipText_name__2JAHA">
+                    <span>${mwi_common.getItemNameByHrid(itemHrid, mwi_common.isZh)}</span>
+                </div>
+                <div>
+                    <span>${mwi_common.isZh? "数量": "Count"}: ${itemCount}</span>
+                </div><div></div>
+                <div class="ItemTooltipText_consumableDetail__2_42s"></div>
+            </div>
+        </div>`;
+        document.body.appendChild(div);
+        return div;
+    }
+
+    /**
+     * 关闭物品提示
+     * @param {string} itemHrid 物品ID
+     */
+    mwi_common.closeItemToolTip = function(itemHrid) {
+        const div = document.getElementById(`mwiCommonItemToolTip${itemHrid}`);
+        if (div) div.remove();
+    }
+
+    /**
      * 前往市场
      * @param {string} itemHrid 物品ID
      * @param {number} itemLevel 物品等级
@@ -258,6 +307,50 @@
 
         error("monster name not found: " + monsterName);
         return "";
+    }
+
+    /**
+     * 获取角色ID
+     * @returns 角色ID
+     */
+    mwi_common.getCharacterId = function() {
+        if (!checkObjectInjected("game")) return 0;
+        if (!mwi_common.game.state || !mwi_common.game.state.character) {
+            error("character not found");
+            return 0;
+        }
+        return mwi_common.game.state.character.id;
+    }
+
+    /**
+     * 通过位置ID获取装备ID
+     * @param {string} locationHrid 装备位置ID "/item_locations/body"
+     * @returns 装备信息 获取失败返回null
+     */
+    mwi_common.getEquipmentByLocationHrid = function(locationHrid) {
+        if (!checkObjectInjected("game")) return null;
+        if (!mwi_common.game.state || !mwi_common.game.state.characterItemByLocationMap) {
+            error("characterItemByLocationMap not found");
+            return null;
+        }
+        return mwi_common.game.state.characterItemByLocationMap.get(locationHrid);
+    }
+
+    /**
+     * 通过物品ID获取物品数量
+     * @param {string} itemHrid 物品ID
+     * @param {number} itemLevel 物品等级
+     * @returns 物品数量
+     */
+    mwi_common.getItemNumByHrid = function(itemHrid, itemLevel) {
+        if (!checkObjectInjected("game")) return 0;
+        if (!mwi_common.game.state || !mwi_common.game.state.characterItemMap) {
+            error("characterItemMap not found");
+            return 0;
+        }
+        const key = `${mwi_common.getCharacterId()}::/item_locations/inventory::${itemHrid}::${itemLevel}`;
+        const item = mwi_common.game.state.characterItemMap.get(key);
+        return item? item.count: 0;
     }
 
     /**************************************** MutationObserver注入 ****************************************/

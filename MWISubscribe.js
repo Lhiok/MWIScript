@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWISubscribe
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.4
 // @description  Subscribe Market Item
 // @author       Lhiok
 // @license      MIT
@@ -50,6 +50,13 @@
                 console.info(`[MWISubscribe] goto ${itemHrid}`);
                 mwi_common.gotoMarket(itemHrid, 0); 
             });
+            // 鼠标悬浮事件
+            item.addEventListener('mouseenter', function(event) {
+                console.info(`[MWISubscribe] show tooltip ${itemHrid} at (${event.clientX}, ${event.clientY})`);
+                const itemCount = mwi_common.getItemNumByHrid(itemHrid, 0);
+                mwi_common.openItemToolTip(itemHrid, 0, itemCount > 0? itemCount: 1, event.clientX, event.clientY);
+            });
+            item.addEventListener('mouseleave', () => mwi_common.closeItemToolTip(itemHrid));
         });
     }
 
