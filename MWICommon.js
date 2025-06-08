@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWICommon
 // @namespace    http://tampermonkey.net/
-// @version      0.4
+// @version      0.5
 // @description  Common API for MWIScript
 // @author       Lhiok
 // @license      MIT
@@ -190,6 +190,9 @@
 
         const currentSec = new Date().getTime() / 1000;
         if (mwi_common.nextMarketDataUpdateTime && currentSec < mwi_common.nextMarketDataUpdateTime) return;
+
+        // 防止同时间多次请求
+        mwi_common.nextMarketDataUpdateTime = currentSec + 5 * 60;
 
         info("updating market data");
         if (!await loadMarketData()) {
