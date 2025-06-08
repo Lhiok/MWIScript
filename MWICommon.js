@@ -1,14 +1,14 @@
 // ==UserScript==
 // @name         MWICommon
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.4
 // @description  Common API for MWIScript
 // @author       Lhiok
 // @license      MIT
 // @match        https://www.milkywayidle.com/*
 // @match        https://test.milkywayidle.com/*
 // @icon         https://www.milkywayidle.com/favicon.svg
-// @@supportURL  https://github.com/Lhiok/MWIScript/
+// @supportURL   https://github.com/Lhiok/MWIScript/
 // @grant        none
 // @run-at       document-start
 // ==/UserScript==
@@ -27,6 +27,7 @@
         eventNames: null, // 事件名称
 
         injected: false, // 是否注入完成 完成触发document的mwi_common_injected事件
+        marketDataLoaded: false, // 市场数据是否加载完成
         isZh: false, // 是否中文
 
         handleGameAPI: null, // 调用游戏API
@@ -47,6 +48,7 @@
         getCharacterId: null, // 获取角色ID
         getEquipmentByLocationHrid: null, // 通过位置获取装备
         getItemNumByHrid: null, // 通过物品ID获取数量
+        getItemPriceByHrid: null, // 通过物品ID获取价格
 
         /**************************************** Private ****************************************/
 
@@ -56,6 +58,8 @@
         alchemyCalculator: null, // 炼金对象
 
         itemNameToHrid: null, // 名称到物品ID
+        marketData: null, // 市场数据
+        nextMarketDataUpdateTime: 0, // 下次市场数据更新时间
     };
 
     /**************************************** Log ****************************************/
@@ -74,8 +78,13 @@
     
     /**************************************** Private ****************************************/
     
+    let marketDataRetryTimeoutId = 0;
+    const marketDataUrl = "https://www.milkywayidle.com/game_data/marketplace.json";
+    
     const eventNames = mwi_common.eventNames = {
         injected: "mwi_common_injected", // 注入完成
+        marketDataLoaded: "mwi_common_market_data_loaded", // 市场数据加载完成
+        marketDataUpdate: "mwi_common_market_data_update", // 市场数据更新
         login: "mwi_common_login", // 登录
         actionUpdate : "mwi_common_action_update", // 行动队列变更
         actionComplete: "mwi_common_action_complete", // 完成一次行动
@@ -151,6 +160,60 @@
             api.apply(this, args);
             events.forEach(event => document.dispatchEvent(new CustomEvent(event, { detail: args })));
         }
+    }
+
+    async function loadMarketData() {
+        info("loading market data");
+        const marketData = await fetch(marketDataUrl);
+        if (!marketData.ok) {
+            error("failed to load market data");
+            return false;
+        }
+
+        const marketJson = await marketData.json();
+        if (!marketJson || !marketJson.marketData || !marketJson.timestamp) {
+            error("failed to parse market data");
+            return false;
+        }
+
+        mwi_common.marketData = marketJson.marketData;
+        mwi_common.nextMarketDataUpdateTime = marketJson.timestamp + 6 * 60 * 60;
+        info("market data loaded");
+        return true;
+    }
+
+    async function updateMarketData() {
+        // 重试中取消更新
+        if (marketDataRetryTimeoutId) {
+            return;
+        }
+
+        const currentSec = new Date().getTime() / 1000;
+        if (mwi_common.nextMarketDataUpdateTime && currentSec < mwi_common.nextMarketDataUpdateTime) return;
+
+        info("updating market data");
+        if (!await loadMarketData()) {
+            error("failed to update market data");
+            return;
+        }
+
+        if (!mwi_common.marketDataLoaded) {
+            info("market data loaded");
+            mwi_common.marketDataLoaded = true;
+            mwi_common.addNotification(mwi_common.isZh? "市场数据已加载": "Market data loaded", false);
+            document.dispatchEvent(new CustomEvent(eventNames.marketDataLoaded));
+            return;
+        }
+
+        // 市场数据更新存在随机性 未更新推迟15分钟
+        if (mwi_common.nextMarketDataUpdateTime <= currentSec) {
+            info("market data update delayed");
+            mwi_common.nextMarketDataUpdateTime = currentSec + 15 * 60;
+            return;
+        }
+        
+        mwi_common.addNotification(mwi_common.isZh? "市场数据已更新": "Market data updated", false);
+        document.dispatchEvent(new CustomEvent(eventNames.marketDataUpdate));
     }
 
     /**************************************** Public ****************************************/
@@ -355,6 +418,44 @@
         return item? item.count: 0;
     }
 
+    /**
+     * 获取物品价格
+     * @param {string} itemHrid 
+     * @param {"ask" | "bid"} type
+     * @returns 查询失败返回-1
+     */
+    mwi_common.getItemPriceByHrid = function(itemHrid, itemLevel, type) {
+        // 调用时自动更新
+        updateMarketData();
+
+        if (!mwi_common.marketDataLoaded || !mwi_common.marketData) {
+            warn("market data not loaded");
+            return -1;
+        }
+        
+        const itemPrices = mwi_common.marketData[itemHrid];
+        if (itemPrices === undefined) {
+            warn("item not found in market data: " + itemHrid);
+            return -1;
+        }
+
+        const targetLevelPrice = itemPrices[itemLevel];
+        if (targetLevelPrice === undefined) return -1;
+
+        if (type === "ask") {
+            if (targetLevelPrice.a === undefined) return -1;
+            return targetLevelPrice.a;
+        }
+
+        if (type === "bid") {
+            if (targetLevelPrice.b === undefined) return -1;
+            return targetLevelPrice.b;
+        }
+
+        warn("invalid type: " + type);
+        return -1;
+    }
+
     /**************************************** MutationObserver注入 ****************************************/
 
     const mooketSpace = "mwi";
@@ -368,7 +469,11 @@
         for (let key in gameAPICallEvents) hookGameAPICall(key, ...gameAPICallEvents[key]);
         
         info("dispatch injected event");
+        mwi_common.addNotification(mwi_common.isZh? "已注入": "Injected", false);
         document.dispatchEvent(new CustomEvent(eventNames.injected));
+
+        // 市场数据先加载完成补提示
+        mwi_common.marketDataLoaded && mwi_common.addNotification(mwi_common.isZh? "市场数据已加载": "Market data loaded", false);
     }
 
     function initWithMooket() {
@@ -462,6 +567,28 @@
             }
         }
     }).observe(document, { childList: true, subtree: true });
+    
+    /**************************************** 初始化官方市场数据 ****************************************/
+
+    async function initMarketData(retryCount = 0) {
+        info(retryCount? `retry to init market data ${retryCount}`: "init market data");
+        marketDataRetryTimeoutId = 0;
+
+        if (!await loadMarketData()) {
+            error("failed to init market data");
+            if (retryCount <= 3) {
+                marketDataRetryTimeoutId = setTimeout(initMarketData, 3000, ++retryCount);
+            }
+            return;
+        }
+
+        info("market data initialized");
+        mwi_common.marketDataLoaded = true;
+        mwi_common.addNotification(mwi_common.isZh? "市场数据已加载": "Market data loaded", false);
+        document.dispatchEvent(new CustomEvent(eventNames.marketDataLoaded));
+    }
+
+    initMarketData();
 
     info("initialized");
 })();
