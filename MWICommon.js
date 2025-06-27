@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWICommon
 // @namespace    http://tampermonkey.net/
-// @version      0.5
+// @version      0.6
 // @description  Common API for MWIScript
 // @author       Lhiok
 // @license      MIT
@@ -106,8 +106,8 @@
     // API调用事件
     const gameAPICallEvents = {
         ["handleMessageInitCharacterData"]: [eventNames.login],
-        ["handleMessageActionUpdate"]: [eventNames.actionUpdate],
-        ["handleMessageActionComplete"]: [eventNames.actionComplete],
+        ["handleMessageActionsUpdated"]: [eventNames.actionUpdate],
+        ["handleMessageActionCompleted"]: [eventNames.actionComplete],
         ["handleMessageQuestsUpdated"]: [eventNames.taskUpdate],
         ["handleMessageItemsUpdated"]: [eventNames.itemUpdate],
         ["handleMessageAbilitiesUpdated"]: [eventNames.skillUpdate],
