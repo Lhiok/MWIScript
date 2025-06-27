@@ -23,12 +23,9 @@ jobs:
         with:
           node-version: '18'  # Node.js 版本
 
-      - name: 更新文件内容
+      - name: 执行 autoUpdate.js
         run: |
-          # 创建或更新示例文件
-          echo "文件最后更新时间: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" > updated_file.txt
-          # 或者使用 Node.js 脚本更新特定文件
-          # node update-script.js
+          node autoUpdate.js
 
       - name: 提交更新
         run: |
