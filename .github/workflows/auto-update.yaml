@@ -1,0 +1,42 @@
+name: Auto Update Yesterday Market Data
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # UTC 时间每天 0 点执行
+  workflow_dispatch:  # 允许手动触发工作流
+
+jobs:
+  update-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+        with:
+          ref: json  # 要更新的分支名
+          token: ${{ secrets.GITHUB_TOKEN }}  # 使用自动生成的 token
+
+      - name: 设置 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'  # Node.js 版本
+
+      - name: 更新文件内容
+        run: |
+          # 创建或更新示例文件
+          echo "文件最后更新时间: $(date -u +'%Y-%m-%dT%H:%M:%SZ')" > updated_file.txt
+          # 或者使用 Node.js 脚本更新特定文件
+          # node update-script.js
+
+      - name: 提交更新
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add .
+          # 检查是否有文件变更
+          if ! git diff --staged --quiet; then
+            git commit -m "自动更新: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            git push
+            echo "已推送更新"
+          else
+            echo "没有文件变更，跳过推送"
+          fi
