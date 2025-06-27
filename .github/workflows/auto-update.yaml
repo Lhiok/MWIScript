@@ -4,6 +4,9 @@ on:
   schedule:
     - cron: '0 0 * * *'  # UTC 时间每天 0 点执行
   workflow_dispatch:  # 允许手动触发工作流
+  
+permissions:
+  contents: write  # 允许读写仓库内容
 
 jobs:
   update-and-push:
