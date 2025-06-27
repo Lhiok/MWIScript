@@ -54,8 +54,6 @@
 
         game: null, // 游戏对象
         lang: null, // 语言翻译对象
-        buffCalculator: null, // buff计算对象
-        alchemyCalculator: null, // 炼金对象
 
         itemNameToHrid: null, // 名称到物品ID
         marketData: null, // 市场数据
@@ -80,9 +78,11 @@
     
     let marketDataRetryTimeoutId = 0;
     const marketDataUrl = "https://www.milkywayidle.com/game_data/marketplace.json";
+    const langDataUrl = "https://raw.githubusercontent.com/Lhiok/MWIScript/main/lang.json";
     
     const eventNames = mwi_common.eventNames = {
         injected: "mwi_common_injected", // 注入完成
+        langDataLoaded: "mwi_common_lang_data_loaded", // lang数据加载完成
         marketDataLoaded: "mwi_common_market_data_loaded", // 市场数据加载完成
         marketDataUpdate: "mwi_common_market_data_update", // 市场数据更新
         login: "mwi_common_login", // 登录
@@ -324,8 +324,8 @@
      * @returns 物品名称
      */
     mwi_common.getItemNameByHrid = function(itemHrid, isZh) {
-        if (!checkObjectInjected("lang")) return;
-        return (isZh? mwi_common.lang.zh: mwi_common.lang.en).translation.itemNames[itemHrid];
+        if (!mwi_common.lang) return "";
+        return (isZh? mwi_common.lang.zh: mwi_common.lang.en).itemNames[itemHrid];
     }
 
     /**
@@ -335,11 +335,11 @@
      */
     mwi_common.getItemHridByName = function(itemName) {
         if (mwi_common.itemNameToHrid) return mwi_common.itemNameToHrid[itemName];
-        if (!checkObjectInjected("lang")) return;
+        if (!mwi_common.lang) return "";
 
         const itemNameToHrid = mwi_common.itemNameToHrid = {};
-        const enItemNames = mwi_common.lang.en.translation.itemNames;
-        const zhItemNames = mwi_common.lang.zh.translation.itemNames;
+        const enItemNames = mwi_common.lang.en.itemNames;
+        const zhItemNames = mwi_common.lang.zh.itemNames;
         for (const itemHrid in enItemNames) itemNameToHrid[enItemNames[itemHrid]] = itemHrid;
         for (const itemHrid in zhItemNames) itemNameToHrid[zhItemNames[itemHrid]] = itemHrid;
         return itemNameToHrid[itemName];
@@ -352,9 +352,9 @@
      * @returns 行动ID
      */
     mwi_common.getActionHridByName = function(actionName, isZh) {
-        if (!checkObjectInjected("lang")) return;
+        if (!mwi_common.lang) return "";
 
-        const autionNames = (isZh? mwi_common.lang.zh: mwi_common.lang.en).translation.actionNames;
+        const autionNames = (isZh? mwi_common.lang.zh: mwi_common.lang.en).actionNames;
         for (const actionHrid in autionNames) if (autionNames[actionHrid] === actionName) return actionHrid;
 
         error("action name not found: " + actionName);
@@ -368,9 +368,9 @@
      * @returns 怪物ID
      */
     mwi_common.getMonsterHridByName = function(monsterName, isZh) {
-        if (!checkObjectInjected("lang")) return;
+        if (!mwi_common.lang) return "";
 
-        const autionNames = (isZh? mwi_common.lang.zh: mwi_common.lang.en).translation.monsterNames;
+        const autionNames = (isZh? mwi_common.lang.zh: mwi_common.lang.en).monsterNames;
         for (const monsterHrid in autionNames) if (autionNames[monsterHrid] === monsterName) return monsterHrid;
 
         error("monster name not found: " + monsterName);
@@ -482,9 +482,6 @@
     function initWithMooket() {
         info("init with mooket");
         mwi_common.game = window[mooketSpace].game;
-        mwi_common.lang = window[mooketSpace].lang;
-        mwi_common.buffCalculator = window[mooketSpace].buffCalculator;
-        mwi_common.alchemyCalculator = window[mooketSpace].alchemyCalculator;
         onInjected();
     }
 
@@ -505,21 +502,6 @@
                     name: "game",
                     pattern: "this.sendPing=",
                     replacement: `window.${selfSpace}.game=this,this.sendPing=`,
-                },
-                {
-                    name: "lang",
-                    pattern: "Ca.a.use",
-                    replacement: `window.${selfSpace}.lang=Oa;Ca.a.use`,
-                },
-                {
-                    name: "buffCalculator",
-                    pattern: "var Q=W;",
-                    replacement: `window.${selfSpace}.buffCalculator=W;var Q=W;`,
-                },
-                {
-                    name: "alchemyCalculator",
-                    pattern: "class Rn",
-                    replacement: `window.${selfSpace}.alchemyCalculator=Ln;class Rn`,
                 }
             ];
             injectionPoints.forEach(injectionPoint => {
@@ -570,6 +552,34 @@
             }
         }
     }).observe(document, { childList: true, subtree: true });
+    
+    /**************************************** 初始化lang ****************************************/
+
+    async function initLangData(retryCount = 0) {
+        info(retryCount? `retry to init lang data ${retryCount}`: "init lang data");
+        
+        const langData = await fetch(langDataUrl);
+        if (!langData.ok) {
+            error("failed to load lang data");
+            if (retryCount <= 3) {
+                setTimeout(initLangData, 3000, ++retryCount);
+            }
+            return;
+        }
+
+        const langJson = await langData.json();
+        if (!langJson) {
+            error("failed to parse lang data");
+            return;
+        }
+        
+        info("lang data initialized");
+        mwi_common.lang = langJson;
+        mwi_common.addNotification(mwi_common.isZh? "Lang数据已加载": "Lang data loaded", false);
+        document.dispatchEvent(new CustomEvent(eventNames.langDataLoaded));
+    }
+
+    initLangData();
     
     /**************************************** 初始化官方市场数据 ****************************************/
 
