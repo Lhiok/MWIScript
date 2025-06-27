@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWISubscribe
 // @namespace    http://tampermonkey.net/
-// @version      0.6
+// @version      0.7
 // @description  Subscribe Market Item
 // @author       Lhiok
 // @license      MIT
@@ -126,7 +126,7 @@
     }
 
     function updateSubscribedList() {
-        const displayContainer = document.querySelector("div#displayContainer141");
+        const displayContainer = document.querySelector("div#subscribeDisplayContainer");
         if (!displayContainer) {
             return;
         }
@@ -176,7 +176,7 @@
 
         // 创建收藏按钮
         const subscribeButton = document.createElement("button");
-        subscribeButton.setAttribute("id", "SubscribeButton141");
+        subscribeButton.setAttribute("id", "subscribeButton");
         subscribeButton.className = "subscribe-btn";
         subscribeButton.style.position = "absolute";
         subscribeButton.style.padding = "0";
@@ -278,7 +278,8 @@
     
     function createDisplayButton(marketPanel) {
         const tabPanelContainer = marketPanel.querySelector(".TabsComponent_tabPanelsContainer__26mzo");
-        if (!tabPanelContainer) {
+        const filterContainer = marketPanel.querySelector(".MarketplacePanel_itemFilterContainer__3F3td");
+        if (!tabPanelContainer || !filterContainer) {
             return;
         }
 
@@ -288,26 +289,37 @@
             return;
         }
         
-        // 创建收藏按钮
-        const displayButton = document.createElement("button");
-        displayButton.setAttribute("class", "MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1q2h7u5");
-        displayButton.setAttribute("tabindex", -1);
-        displayButton.setAttribute("role", "tab");
-        displayButton.setAttribute("aria-selected", false);
-        displayButton.setAttribute("id", "displayButton141");
-        displayButton.textContent = "收藏";
-        tabList.appendChild(displayButton);
+        // 创建收藏页签按钮
+        const subscribeTabButton = document.createElement("button");
+        subscribeTabButton.setAttribute("class", "MuiButtonBase-root MuiTab-root MuiTab-textColorPrimary css-1q2h7u5");
+        subscribeTabButton.setAttribute("tabindex", -1);
+        subscribeTabButton.setAttribute("role", "tab");
+        subscribeTabButton.setAttribute("aria-selected", false);
+        subscribeTabButton.setAttribute("id", "subscribeTabButton");
+        subscribeTabButton.textContent = mwi_common.isZh? "收藏": "Subscribed";
+        tabList.appendChild(subscribeTabButton);
 
         // 创建收藏面板
-        const displayPanel = document.createElement("div");
-        displayPanel.setAttribute("class", "TabPanel_tabPanel__tXMJF TabPanel_hidden__26UM3");
-        panelList.appendChild(displayPanel);
+        const subscribeDisplayPanel = document.createElement("div");
+        subscribeDisplayPanel.setAttribute("class", "TabPanel_tabPanel__tXMJF TabPanel_hidden__26UM3");
+        panelList.appendChild(subscribeDisplayPanel);
         // 创建收藏容器
-        const displayContainer = document.createElement("div");
-        displayContainer.setAttribute("class", "MarketplacePanel_marketItems__D4k7e");
-        displayContainer.setAttribute("id", "displayContainer141");
-        displayPanel.appendChild(displayContainer);
+        const subscribeDisplayContainer = document.createElement("div");
+        subscribeDisplayContainer.setAttribute("class", "MarketplacePanel_marketItems__D4k7e");
+        subscribeDisplayContainer.setAttribute("id", "subscribeDisplayContainer");
+        subscribeDisplayPanel.appendChild(subscribeDisplayContainer);
         updateSubscribedList();
+        
+        // 创建查看收藏按钮
+        const showSubscribeButton = document.createElement("button");
+        showSubscribeButton.setAttribute("id", "showSubscribeButton");
+        showSubscribeButton.style.position = "absolute";
+        showSubscribeButton.style.marginLeft = "20px";
+        showSubscribeButton.style.backgroundColor = "orange";
+        showSubscribeButton.style.color = "black";
+        showSubscribeButton.style.whiteSpace = "nowrap";
+        showSubscribeButton.textContent = mwi_common.isZh? "查看收藏": "View Subscribed Items";
+        filterContainer.appendChild(showSubscribeButton);
 
         // 设置按钮点击事件
         tabList.childNodes.forEach((childBtn, btnIdx) => {
@@ -335,8 +347,26 @@
                     }
                 });
                 // 更新收藏列表
-                if (childBtn === displayButton) updateSubscribedList();
+                if (childBtn === subscribeTabButton) updateSubscribedList();
             });
+        });
+
+        showSubscribeButton.addEventListener("click", function () {
+            const filterInput = filterContainer.querySelector(".Input_input__2-t98");
+            if (!filterInput) {
+                return;
+            }
+            
+            // 取消筛选
+            const lastValue = filterInput.value;
+            const event = new Event("input", { bubbles: true });
+            event.simulated = true;
+            filterInput.value = "";
+            filterInput._valueTracker && filterInput._valueTracker.setValue(lastValue);
+            filterInput.dispatchEvent(new Event("input", { bubbles: true }));
+
+            // 选中收藏页签
+            subscribeTabButton.click();
         });
     }
 
@@ -346,10 +376,10 @@
             return;
         }
 
-        const subscribeButton = marketPanel.querySelector("button#SubscribeButton141");
+        const subscribeButton = marketPanel.querySelector("button#subscribeButton");
         subscribeButton || createSubscribeButton(marketPanel);
 
-        const displayButton = marketPanel.querySelector("button#displayButton141");
+        const displayButton = marketPanel.querySelector("button#subscribeTabButton");
         displayButton || createDisplayButton(marketPanel);
     }
 
