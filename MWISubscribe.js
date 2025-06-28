@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWISubscribe
 // @namespace    http://tampermonkey.net/
-// @version      0.9
+// @version      0.10
 // @description  Subscribe Market Item
 // @author       Lhiok
 // @license      MIT
@@ -64,6 +64,18 @@
         localStorage.setItem(storage_key, JSON.stringify(mwi_subscribe_items));
     }
 
+    function getPricePercentColor(pricePercent) {
+        if (pricePercent > 0) {
+            return "#00ff00";
+        }
+        else if (pricePercent < 0) {
+            return "#ff0000";
+        }
+        else {
+            return "#aaaaaa";
+        }
+    }
+
     function updateSubscribedList() {
         const displayContainer = document.querySelector("div#subscribeDisplayContainer");
         if (!displayContainer) {
@@ -124,19 +136,19 @@
                 </div>
                 <hr borderColor="hsl(204, 92.60%, 5.30%)" margin="4px 4px">
                 <div style="display: flex; gap: 10px; white-space: nowrap;">
-                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "今日价格": "Today"}:</div>
+                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "今日价": "Today"}:</div>
                     <div>${formatNumberWithUnit(askPrice)} / ${formatNumberWithUnit(bidPrice)}</div>
                     <div>(${formatNumberWithUnit(askPrice * itemCount)} / ${formatNumberWithUnit(bidPrice * itemCount)})</div>
                 </div>
                 <div style="display: flex; gap: 10px; white-space: nowrap;">
-                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "昨日价格": "Yesterday"}:</div>
+                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "昨日价": "Yesterday"}:</div>
                     <div>${formatNumberWithUnit(askPriceYesterday)} / ${formatNumberWithUnit(bidPriceYesterday)}</div>
-                    <div>(<span style="color: ${askPricePercentYesterday >= 0? "red": "green"}">${askPricePercentYesterday.toFixed(2)}%</span> / <span style="color: ${bidPricePercentYesterday >= 0? "red": "green"}">${bidPricePercentYesterday.toFixed(2)}%</span>)</div>
+                    <div>(<span style="color: ${getPricePercentColor(askPricePercentYesterday)}">${askPricePercentYesterday.toFixed(2)}%</span> / <span style="color: ${getPricePercentColor(bidPricePercentYesterday)}">${bidPricePercentYesterday.toFixed(2)}%</span>)</div>
                 </div>
                 <div style="display: flex; gap: 10px; white-space: nowrap;">
-                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "订阅价格": "Subscribe"}:</div>
+                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "订阅价": "Subscribe"}:</div>
                     <div>${formatNumberWithUnit(askPriceSubscribe)} / ${formatNumberWithUnit(bidPriceSubscribe)}</div>
-                    <div>(<span style="color: ${askPricePercentSubscribe >= 0? "red": "green"}">${askPricePercentSubscribe.toFixed(2)}%</span> / <span style="color: ${bidPricePercentSubscribe >= 0? "red": "green"}">${bidPricePercentSubscribe.toFixed(2)}%</span>)</div>
+                    <div>(<span style="color: ${getPricePercentColor(askPricePercentSubscribe)}">${askPricePercentSubscribe.toFixed(2)}%</span> / <span style="color: ${getPricePercentColor(bidPricePercentSubscribe)}">${bidPricePercentSubscribe.toFixed(2)}%</span>)</div>
                 </div>
                 <div style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; white-space: nowrap;">
                     <button id="updatePrice" style="background-color: orange; color: black; white-space: nowrap;">${mwi_common.isZh? "更新订阅价格": "Update Subscribe Price"}</button>
