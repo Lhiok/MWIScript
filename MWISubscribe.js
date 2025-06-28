@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWISubscribe
 // @namespace    http://tampermonkey.net/
-// @version      0.8
+// @version      0.9
 // @description  Subscribe Market Item
 // @author       Lhiok
 // @license      MIT
@@ -113,28 +113,28 @@
                     </svg>
                     <div style="width: 240px; height: 60px; padding-left: 10px;">
                         <div style="display: flex; gap: 10px;">
-                            <div style="color:hsl(202, 41.50%, 71.20%);">名称:</div>
-                            <div>${mwi_common.getItemNameByHrid(itemHrid, mwi_common.isZh)}</div>
+                            <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "名称": "Name"}:</div>
+                            <div>${mwi_common.getItemNameByHrid(itemHrid, mwi_common.isZh)}${itemLevel > 0? ` +${itemLevel}`: ""}</div>
                         </div>
                         <div style="display: flex; gap: 10px;">
-                            <div style="color:hsl(202, 41.50%, 71.20%);">数量:</div>
+                            <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "数量": "Count"}:</div>
                             <div>${formatNumber(itemCount)}</div>
                         </div>
                     </div>
                 </div>
                 <hr borderColor="hsl(204, 92.60%, 5.30%)" margin="4px 4px">
                 <div style="display: flex; gap: 10px; white-space: nowrap;">
-                    <div style="color:hsl(202, 41.50%, 71.20%);">今日价格:</div>
+                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "今日价格": "Today"}:</div>
                     <div>${formatNumberWithUnit(askPrice)} / ${formatNumberWithUnit(bidPrice)}</div>
                     <div>(${formatNumberWithUnit(askPrice * itemCount)} / ${formatNumberWithUnit(bidPrice * itemCount)})</div>
                 </div>
                 <div style="display: flex; gap: 10px; white-space: nowrap;">
-                    <div style="color:hsl(202, 41.50%, 71.20%);">昨日价格:</div>
+                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "昨日价格": "Yesterday"}:</div>
                     <div>${formatNumberWithUnit(askPriceYesterday)} / ${formatNumberWithUnit(bidPriceYesterday)}</div>
                     <div>(<span style="color: ${askPricePercentYesterday >= 0? "red": "green"}">${askPricePercentYesterday.toFixed(2)}%</span> / <span style="color: ${bidPricePercentYesterday >= 0? "red": "green"}">${bidPricePercentYesterday.toFixed(2)}%</span>)</div>
                 </div>
                 <div style="display: flex; gap: 10px; white-space: nowrap;">
-                    <div style="color:hsl(202, 41.50%, 71.20%);">订阅价格:</div>
+                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "订阅价格": "Subscribe"}:</div>
                     <div>${formatNumberWithUnit(askPriceSubscribe)} / ${formatNumberWithUnit(bidPriceSubscribe)}</div>
                     <div>(<span style="color: ${askPricePercentSubscribe >= 0? "red": "green"}">${askPricePercentSubscribe.toFixed(2)}%</span> / <span style="color: ${bidPricePercentSubscribe >= 0? "red": "green"}">${bidPricePercentSubscribe.toFixed(2)}%</span>)</div>
                 </div>
