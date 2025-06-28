@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWICommon
 // @namespace    http://tampermonkey.net/
-// @version      0.6
+// @version      0.7
 // @description  Common API for MWIScript
 // @author       Lhiok
 // @license      MIT
@@ -49,6 +49,7 @@
         getEquipmentByLocationHrid: null, // 通过位置获取装备
         getItemNumByHrid: null, // 通过物品ID获取数量
         getItemPriceByHrid: null, // 通过物品ID获取价格
+        getItemPriceYesterdayByHrid: null, // 通过物品ID获取昨日价格
 
         /**************************************** Private ****************************************/
 
@@ -57,6 +58,7 @@
 
         itemNameToHrid: null, // 名称到物品ID
         marketData: null, // 市场数据
+        marketDataYesterday: null, // 市场数据昨日
         nextMarketDataUpdateTime: 0, // 下次市场数据更新时间
     };
 
@@ -78,6 +80,7 @@
     
     let marketDataRetryTimeoutId = 0;
     const marketDataUrl = "https://www.milkywayidle.com/game_data/marketplace.json";
+    const marketDataYesterdayUrl = "https://raw.githubusercontent.com/Lhiok/MWIScript/json/marketplace_yesterday.json";
     const langDataUrl = "https://raw.githubusercontent.com/Lhiok/MWIScript/main/lang.json";
     
     const eventNames = mwi_common.eventNames = {
@@ -182,6 +185,25 @@
         return true;
     }
 
+    async function loadMarketDataYesterday() {
+        info("loading market data yesterday");
+        const marketDataYesterday = await fetch(marketDataYesterdayUrl);
+        if (!marketDataYesterday.ok) {
+            error("failed to load market data yesterday");
+            return false;
+        }
+
+        const marketJsonYesterday = await marketDataYesterday.json();
+        if (!marketJsonYesterday || !marketJsonYesterday.marketData) {
+            error("failed to parse market data yesterday");
+            return false;
+        }
+
+        mwi_common.marketDataYesterday = marketJsonYesterday.marketData;
+        info("market data yesterday loaded");
+        return true;
+    }
+
     async function updateMarketData() {
         // 重试中取消更新
         if (marketDataRetryTimeoutId) {
@@ -193,6 +215,9 @@
 
         // 防止同时间多次请求
         mwi_common.nextMarketDataUpdateTime = currentSec + 5 * 60;
+
+        // 昨日数据不是特别重要 拉取今日数据时顺带加载
+        loadMarketDataYesterday();
 
         info("updating market data");
         if (!await loadMarketData()) {
@@ -459,6 +484,35 @@
         return -1;
     }
 
+    mwi_common.getItemPriceYesterdayByHrid = function(itemHrid, itemLevel, type) {
+        if (!mwi_common.marketDataYesterday) {
+            warn("market data yesterday not loaded");
+            return -1;
+        }
+        
+        const itemPrices = mwi_common.marketDataYesterday[itemHrid];
+        if (itemPrices === undefined) {
+            warn("item not found in market data yesterday: " + itemHrid);
+            return -1;
+        }
+
+        const targetLevelPrice = itemPrices[itemLevel];
+        if (targetLevelPrice === undefined) return -1;
+
+        if (type === "ask") {
+            if (targetLevelPrice.a === undefined) return -1;
+            return targetLevelPrice.a;
+        }
+
+        if (type === "bid") {
+            if (targetLevelPrice.b === undefined) return -1;
+            return targetLevelPrice.b;
+        }
+
+        warn("invalid type: " + type);
+        return -1;
+    }
+
     /**************************************** MutationObserver注入 ****************************************/
 
     const mooketSpace = "mwi";
@@ -602,6 +656,24 @@
     }
 
     initMarketData();
+    
+    /**************************************** 初始化昨日市场数据 ****************************************/
+
+    async function initMarketDataYesterday(retryCount = 0) {
+        info(retryCount? `retry to init market data yesterday ${retryCount}`: "init market data yesterday");
+
+        if (!await loadMarketDataYesterday()) {
+            error("failed to init market data yesterday");
+            if (retryCount <= 3) {
+                setTimeout(initMarketDataYesterday, 3000, ++retryCount);
+            }
+            return;
+        }
+
+        info("market data yesterday initialized");
+    }
+
+    initMarketDataYesterday();
 
     info("initialized");
 })();

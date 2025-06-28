@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWISubscribe
 // @namespace    http://tampermonkey.net/
-// @version      0.7
+// @version      0.8
 // @description  Subscribe Market Item
 // @author       Lhiok
 // @license      MIT
@@ -16,113 +16,52 @@
     "use strict";
 
     let mwi_common = null;
-    let mwi_subscribe_items = [];
+    let mwi_subscribe_items = {};
+
     const storage_key = "mwi_subscribe_items";
     const subscribeItemsStorage = localStorage.getItem(storage_key);
     if (subscribeItemsStorage) {
-        mwi_subscribe_items = JSON.parse(subscribeItemsStorage);
+        const subscribeItems = JSON.parse(subscribeItemsStorage);
+        // 兼容旧版本
+        if (Array.isArray(subscribeItems)) {
+            for (let i = 0; i < subscribeItems.length; i++) {
+                mwi_subscribe_items[subscribeItems[i]] = {
+                    ask: -2, // -1 代表查询失败 这里使用-2表示旧数据
+                    bid: -2,
+                };
+            }
+            localStorage.setItem(storage_key, JSON.stringify(mwi_subscribe_items));
+        }
+        else {
+            mwi_subscribe_items = subscribeItems;
+        }
     }
 
-    // https://greasyfork.org/zh-CN/scripts/536205-%E9%93%B6%E6%B2%B3%E5%A5%B6%E7%89%9B-%E5%BA%B7%E5%BA%B7%E8%BF%90%E6%B0%94
-    const Tooltip = new class {
-        root = null;
-        tooltip = null;
+    function formatNumber(value) {
+        return value.toString().replace(/\d+/, function (n) {
+            return n.replace(/(\d)(?=(?:\d{3})+$)/g, '$1,')
+        })
+    }
 
-        constructor() { this.init(); }
-        
-        applyOptions(elem, options) {
-            if (typeof options === 'object') {
-                Object.entries(options ?? {}).forEach(([key, value]) => {
-                    if (key === 'style' && typeof value === 'object') {
-                        Object.entries(value ?? {}).forEach(([k, v]) => { elem.style[k] = v; });
-                    } else elem[key] = value;
-                });
-            } else elem.className = options;
-        }
-        
-        elem(tagName, options = null, child = null) {
-            const elem = document.createElement(tagName);
-            this.applyOptions(elem, options);
-            if (typeof child === 'object') {
-                if (Array.isArray(child)) child.forEach(child => { elem.appendChild(child); });
-                else if (child) elem.appendChild(child);
-            } else if (typeof child === 'string') elem.innerHTML = child;
-            return elem;
+    function formatNumberWithUnit(value) {
+        if (value > 10_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(1)}T`;
+        if (value > 10_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+        if (value > 10_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+        if (value > 10_000) return `${(value / 1_000).toFixed(1)}K`;
+        return value;
+    }
+
+    function updateSubscribePrice(itemHrid, itemLevel) {
+        const itemHridLevel = itemLevel > 0? `${itemHrid}::${itemLevel}`: itemHrid;
+        if (mwi_subscribe_items[itemHridLevel] == undefined) {
+            return;
         }
 
-        div(options = null, childList = null) {
-            return this.elem('div', options, childList);
-        }
-
-        init() {
-            const rootClass = 'link-tooltip MuiPopper-root MuiTooltip-popper css-112l0a2';
-            const tooltipClass = 'MuiTooltip-tooltip MuiTooltip-tooltipPlacementBottom css-1spb1s5';
-            this.tooltip = this.div(tooltipClass);
-            this.root = this.div({ className: rootClass, style: { zIndex: 100000, position: 'absolute' } }, this.tooltip);
-            document.body.appendChild(this.root);
-            this.hide();
-        }
-
-        attach(target, content, align = 'left') {
-            const contentGen = typeof content === 'function' ? content : (() => content);
-            target.addEventListener('mouseover', (e) => {
-                this.show(contentGen().outerHTML, target, align);
-            });
-            target.addEventListener('mouseout', () => {
-                this.hide();
-            });
-        }
-
-        show(innerHTML, target = null, align = 'left') {
-            const gap = 2;
-            this.root.style.display = 'block';
-            this.root.style.left = 0;
-            this.root.style.top = 0;
-            this.tooltip.innerHTML = innerHTML;
-            if (target) {
-                const targetRect = target.getBoundingClientRect();
-                const tooltipRootRect = this.root.getBoundingClientRect();
-                const tooltipRect = this.tooltip.getBoundingClientRect();
-                let left = targetRect.left;
-                if (align === 'center') left -= (tooltipRect.width - targetRect.width) / 2;
-                let top = targetRect.bottom + gap;
-                const windowWidth = window.innerWidth;
-                const windowHeight = window.innerHeight + window.scrollY;
-                if (left + tooltipRect.width > windowWidth) left = windowWidth - tooltipRect.width;
-                if (left < 0) left = 0;
-                if (top + tooltipRect.height > windowHeight) top = targetRect.top - tooltipRect.height - gap;
-                this.root.style.left = `${left - (tooltipRootRect.width - tooltipRect.width) / 2}px`;
-                this.root.style.top = `${top - (tooltipRootRect.height - tooltipRect.height) / 2}px`;
-            }
-        }
-
-        hide() { this.root.style.display = 'none'; }
-
-        formatNumber(value) {
-            return value.toString().replace(/\d+/, function (n) {
-                return n.replace(/(\d)(?=(?:\d{3})+$)/g, '$1,')
-            })
-        }
-
-        formatNumberWithUnit(value) {
-            if (value > 10_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(1)}T`;
-            if (value > 10_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
-            if (value > 10_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-            if (value > 10_000) return `${(value / 1_000).toFixed(1)}K`;
-            return value;
-        }
-
-        item(hrid, level, count) {
-            const ask = mwi_common.getItemPriceByHrid(hrid, level, 'ask');
-            const bid = mwi_common.getItemPriceByHrid(hrid, level, 'bid');
-            return this.div('ItemTooltipText_itemTooltipText__zFq3A', [
-                this.div('ItemTooltipText_name__2JAHA', mwi_common.getItemNameByHrid(hrid, mwi_common.isZh) + (level? `+${level}`: '')),
-                this.div(null, `拥有数量: ${this.formatNumber(count)}`),
-                this.div({ style: { color: '#804600' } },
-                    `日均价: ${this.formatNumberWithUnit(ask)} / ${this.formatNumberWithUnit(bid)} (${this.formatNumberWithUnit(ask * count)} / ${this.formatNumberWithUnit(bid * count)})`
-                ),
-            ]);
-        }
+        mwi_subscribe_items[itemHridLevel] = {
+            ask: mwi_common.getItemPriceByHrid(itemHrid, itemLevel, 'ask'),
+            bid: mwi_common.getItemPriceByHrid(itemHrid, itemLevel, 'bid'),
+        };
+        localStorage.setItem(storage_key, JSON.stringify(mwi_subscribe_items));
     }
 
     function updateSubscribedList() {
@@ -134,7 +73,7 @@
         // 移除收藏物品
         displayContainer.innerHTML = "";
         // 创建收藏物品
-        mwi_subscribe_items.forEach(itemHridLevel => {
+        for (let itemHridLevel in mwi_subscribe_items) {
             const itemInfo = itemHridLevel.split("::");
             const itemHrid = itemInfo[0];
             const itemLevel = itemInfo[1]? Number(itemInfo[1]): 0;
@@ -143,29 +82,78 @@
             }
 
             const itemCount = mwi_common.getItemNumByHrid(itemHrid, itemLevel);
+            
+            // 当前价格
+            const askPrice = mwi_common.getItemPriceByHrid(itemHrid, itemLevel, 'ask');
+            const bidPrice = mwi_common.getItemPriceByHrid(itemHrid, itemLevel, 'bid');
+
+            // 昨日价格
+            const askPriceYesterday = mwi_common.getItemPriceYesterdayByHrid(itemHrid, itemLevel, 'ask');
+            const bidPriceYesterday = mwi_common.getItemPriceYesterdayByHrid(itemHrid, itemLevel, 'bid');
+            const askPricePercentYesterday = askPriceYesterday > 0? (askPrice - askPriceYesterday) / askPriceYesterday * 100: 0;
+            const bidPricePercentYesterday = bidPriceYesterday > 0? (bidPrice - bidPriceYesterday) / bidPriceYesterday * 100: 0;
+
+            // 订阅价格
+            const subscribePrice = mwi_subscribe_items[itemHridLevel];
+            let askPriceSubscribe = subscribePrice.ask;
+            let bidPriceSubscribe = subscribePrice.bid;
+            if (askPriceSubscribe == -2 && bidPriceSubscribe == -2) {
+                askPriceSubscribe = askPrice;
+                bidPriceSubscribe = bidPrice;
+                updateSubscribePrice(itemHrid, itemLevel);
+            }
+            const askPricePercentSubscribe = askPriceSubscribe > 0? (askPrice - askPriceSubscribe) / askPriceSubscribe * 100: 0;
+            const bidPricePercentSubscribe = bidPriceSubscribe > 0? (bidPrice - bidPriceSubscribe) / bidPriceSubscribe * 100: 0;
+
             const item = document.createElement("div");
-            item.setAttribute("class", "Item_itemContainer__x7kH1");
-            item.innerHTML = `<div>
-                <div class="Item_item__2De2O Item_clickable__3viV6" style="position: relative;">
-                    <div class="Item_iconContainer__5z7j4">
-                        <svg role="img" aria-label="${mwi_common.getItemNameByHrid(itemHrid, mwi_common.isZh)}" class="Icon_icon__2LtL_" width="100%" height="100%">
-                            <use href="/static/media/items_sprite.6d12eb9d.svg#${itemHrid.substr(7)}"></use>
-                        </svg>
+            item.innerHTML = `<div style="position: relative; background: hsl(198, 76.50%, 16.70%); padding: 10px;">
+                <div style="display: flex; width: 100%; height: 40px;">
+                    <svg role="img" aria-label="${mwi_common.getItemNameByHrid(itemHrid, mwi_common.isZh)}" style="width: 40px; height: 40px;">
+                        <use href="/static/media/items_sprite.6d12eb9d.svg#${itemHrid.substr(7)}"></use>
+                    </svg>
+                    <div style="width: 240px; height: 60px; padding-left: 10px;">
+                        <div style="display: flex; gap: 10px;">
+                            <div style="color:hsl(202, 41.50%, 71.20%);">名称:</div>
+                            <div>${mwi_common.getItemNameByHrid(itemHrid, mwi_common.isZh)}</div>
+                        </div>
+                        <div style="display: flex; gap: 10px;">
+                            <div style="color:hsl(202, 41.50%, 71.20%);">数量:</div>
+                            <div>${formatNumber(itemCount)}</div>
+                        </div>
                     </div>
-                    <div class="Item_count__1HVvv" style="position: absolute; bottom: 2px; right: 2px;">
-                        ${Tooltip.formatNumberWithUnit(itemCount)}
-                    </div>
-                    <div class="Item_enhancementLevel__19g-e" style="position: absolute; top: 2px; left: 2px;">
-                        ${itemLevel > 0? `+${itemLevel}`: ""}
-                    </div>
+                </div>
+                <hr borderColor="hsl(204, 92.60%, 5.30%)" margin="4px 4px">
+                <div style="display: flex; gap: 10px; white-space: nowrap;">
+                    <div style="color:hsl(202, 41.50%, 71.20%);">今日价格:</div>
+                    <div>${formatNumberWithUnit(askPrice)} / ${formatNumberWithUnit(bidPrice)}</div>
+                    <div>(${formatNumberWithUnit(askPrice * itemCount)} / ${formatNumberWithUnit(bidPrice * itemCount)})</div>
+                </div>
+                <div style="display: flex; gap: 10px; white-space: nowrap;">
+                    <div style="color:hsl(202, 41.50%, 71.20%);">昨日价格:</div>
+                    <div>${formatNumberWithUnit(askPriceYesterday)} / ${formatNumberWithUnit(bidPriceYesterday)}</div>
+                    <div>(<span style="color: ${askPricePercentYesterday >= 0? "red": "green"}">${askPricePercentYesterday.toFixed(2)}%</span> / <span style="color: ${bidPricePercentYesterday >= 0? "red": "green"}">${bidPricePercentYesterday.toFixed(2)}%</span>)</div>
+                </div>
+                <div style="display: flex; gap: 10px; white-space: nowrap;">
+                    <div style="color:hsl(202, 41.50%, 71.20%);">订阅价格:</div>
+                    <div>${formatNumberWithUnit(askPriceSubscribe)} / ${formatNumberWithUnit(bidPriceSubscribe)}</div>
+                    <div>(<span style="color: ${askPricePercentSubscribe >= 0? "red": "green"}">${askPricePercentSubscribe.toFixed(2)}%</span> / <span style="color: ${bidPricePercentSubscribe >= 0? "red": "green"}">${bidPricePercentSubscribe.toFixed(2)}%</span>)</div>
+                </div>
+                <div style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; white-space: nowrap;">
+                    <button id="updatePrice" style="background-color: orange; color: black; white-space: nowrap;">${mwi_common.isZh? "更新订阅价格": "Update Subscribe Price"}</button>
+                    <button id="goToMarket" style="background-color: orange; color: black; white-space: nowrap;">${mwi_common.isZh? "前往市场": "Go to Market"}</button>
                 </div>
             </div>`;
             displayContainer.appendChild(item);
-            // 物品点击事件
-            item.addEventListener("click", () => mwi_common.gotoMarket(itemHrid, itemLevel));
-            // 鼠标悬浮事件
-            Tooltip.attach(item, Tooltip.item(itemHrid, itemLevel, itemCount));
-        });
+
+            // 添加点击事件
+            const updatePriceButton = item.querySelector("button#updatePrice");
+            const goToMarketButton = item.querySelector("button#goToMarket");
+            updatePriceButton && updatePriceButton.addEventListener("click", () => {
+                updateSubscribePrice(itemHrid, itemLevel)
+                updateSubscribedList();
+            });
+            goToMarketButton && goToMarketButton.addEventListener("click", () => mwi_common.gotoMarket(itemHrid, itemLevel));
+        };
     }
 
     function createSubscribeButton(marketPanel) {
@@ -244,7 +232,7 @@
             }
 
             itemHridLevel = itemLevel > 0? `${itemHrid}::${itemLevel}`: itemHrid;
-            isSubscribed = mwi_subscribe_items.includes(itemHridLevel);
+            isSubscribed = mwi_subscribe_items[itemHridLevel] != undefined;
             updateSubscribedButton();
         }
 
@@ -261,12 +249,14 @@
 
             if (isSubscribed) {
                 console.info("[MWISubscribe] add item " + itemHridLevel);
-                mwi_subscribe_items.push(itemHridLevel);
+                mwi_subscribe_items[itemHridLevel] = {
+                    ask: mwi_common.getItemPriceByHrid(itemHrid, itemLevel, 'ask'),
+                    bid: mwi_common.getItemPriceByHrid(itemHrid, itemLevel, 'bid'),
+                }
             }
             else {
                 console.info("[MWISubscribe] remove item " + itemHridLevel);
-                const idx = mwi_subscribe_items.indexOf(itemHridLevel);
-                (~idx) && mwi_subscribe_items.splice(idx, 1);
+                delete mwi_subscribe_items[itemHridLevel];
             }
 
             localStorage.setItem(storage_key, JSON.stringify(mwi_subscribe_items));
@@ -305,8 +295,13 @@
         panelList.appendChild(subscribeDisplayPanel);
         // 创建收藏容器
         const subscribeDisplayContainer = document.createElement("div");
-        subscribeDisplayContainer.setAttribute("class", "MarketplacePanel_marketItems__D4k7e");
         subscribeDisplayContainer.setAttribute("id", "subscribeDisplayContainer");
+        subscribeDisplayContainer.style.display = "grid";
+        subscribeDisplayContainer.style.gridTemplateColumns = "repeat(auto-fill, 320px)";
+        subscribeDisplayContainer.style.gridTemplateRows = "max-content";
+        subscribeDisplayContainer.style.gap = "10px";
+        subscribeDisplayContainer.style.justifyContent = "center";
+        subscribeDisplayContainer.style.overflowY = "auto";
         subscribeDisplayPanel.appendChild(subscribeDisplayContainer);
         updateSubscribedList();
         
