@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWISubscribe
 // @namespace    http://tampermonkey.net/
-// @version      0.11
+// @version      0.12
 // @description  Subscribe Market Item
 // @author       Lhiok
 // @license      MIT
@@ -43,12 +43,19 @@
         })
     }
 
+    function fixNumber(value) {
+        if (value > 100) return value.toFixed(0);
+        if (value > 10) return value.toFixed(1);
+        return value.toFixed(2);
+    }
+
     function formatNumberWithUnit(value) {
-        if (value > 10_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(1)}T`;
-        if (value > 10_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
-        if (value > 10_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-        if (value > 10_000) return `${(value / 1_000).toFixed(1)}K`;
-        return value;
+        if (value >= 1_000_000_000_000_000) return `${fixNumber(value / 1_000_000_000_000_000)}P`;
+        if (value >= 1_000_000_000_000) return `${fixNumber(value / 1_000_000_000_000)}T`;
+        if (value >= 1_000_000_000) return `${fixNumber(value / 1_000_000_000)}B`;
+        if (value >= 1_000_000) return `${fixNumber(value / 1_000_000)}M`;
+        if (value >= 1_000) return `${fixNumber(value / 1_000)}K`;
+        return value.toFixed(0);
     }
 
     function updateSubscribePrice(itemHrid, itemLevel) {
@@ -118,41 +125,41 @@
             const bidPricePercentSubscribe = bidPriceSubscribe > 0? (bidPrice - bidPriceSubscribe) / bidPriceSubscribe * 100: 0;
 
             const item = document.createElement("div");
-            item.innerHTML = `<div style="position: relative; background: hsl(198, 76.50%, 16.70%); padding: 10px;">
+            item.innerHTML = `<div style="position: relative; background: hsl(198, 76.50%, 16.70%); padding: 4px;">
                 <div style="display: flex; width: 100%; height: 40px;">
                     <svg role="img" aria-label="${mwi_common.getItemNameByHrid(itemHrid, mwi_common.isZh)}" style="width: 40px; height: 40px;">
                         <use href="/static/media/items_sprite.6d12eb9d.svg#${itemHrid.substr(7)}"></use>
                     </svg>
-                    <div style="width: 240px; height: 60px; padding-left: 10px;">
-                        <div style="display: flex; gap: 10px;">
+                    <div style="${mwi_common.isZh? "": "font-size: 13px; "}width: 200px; height: 40px; padding-left: 4px;">
+                        <div style="display: flex; gap: 4px; white-space: nowrap;">
                             <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "名称": "Name"}:</div>
                             <div>${mwi_common.getItemNameByHrid(itemHrid, mwi_common.isZh)}${itemLevel > 0? ` +${itemLevel}`: ""}</div>
                         </div>
-                        <div style="display: flex; gap: 10px;">
+                        <div style="display: flex; gap: 4px; white-space: nowrap;">
                             <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "数量": "Count"}:</div>
                             <div>${formatNumber(itemCount)}</div>
                         </div>
                     </div>
                 </div>
                 <hr borderColor="hsl(204, 92.60%, 5.30%)" margin="4px 4px">
-                <div style="display: flex; gap: 10px; white-space: nowrap;">
-                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "今日价": "Today"}:</div>
+                <div style="display: flex; gap: 4px; white-space: nowrap;">
+                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "今": "T"}:</div>
                     <div>${formatNumberWithUnit(askPrice)} / ${formatNumberWithUnit(bidPrice)}</div>
                     <div>(${formatNumberWithUnit(askPrice * itemCount)} / ${formatNumberWithUnit(bidPrice * itemCount)})</div>
                 </div>
-                <div style="display: flex; gap: 10px; white-space: nowrap;">
-                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "昨日价": "Yesterday"}:</div>
+                <div style="display: flex; gap: 4px; white-space: nowrap;">
+                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "昨": "Y"}:</div>
                     <div>${formatNumberWithUnit(askPriceYesterday)} / ${formatNumberWithUnit(bidPriceYesterday)}</div>
                     <div>(<span style="color: ${getPricePercentColor(askPricePercentYesterday)}">${askPricePercentYesterday.toFixed(2)}%</span> / <span style="color: ${getPricePercentColor(bidPricePercentYesterday)}">${bidPricePercentYesterday.toFixed(2)}%</span>)</div>
                 </div>
-                <div style="display: flex; gap: 10px; white-space: nowrap;">
-                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "订阅价": "Subscribe"}:</div>
+                <div style="display: flex; gap: 4px; white-space: nowrap;">
+                    <div style="color:hsl(202, 41.50%, 71.20%);">${mwi_common.isZh? "订": "S"}:</div>
                     <div>${formatNumberWithUnit(askPriceSubscribe)} / ${formatNumberWithUnit(bidPriceSubscribe)}</div>
                     <div>(<span style="color: ${getPricePercentColor(askPricePercentSubscribe)}">${askPricePercentSubscribe.toFixed(2)}%</span> / <span style="color: ${getPricePercentColor(bidPricePercentSubscribe)}">${bidPricePercentSubscribe.toFixed(2)}%</span>)</div>
                 </div>
                 <div style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 4px; white-space: nowrap;">
-                    <button id="updatePrice" style="background-color: orange; color: black; white-space: nowrap;">${mwi_common.isZh? "更新订阅价格": "Update Subscribe Price"}</button>
-                    <button id="goToMarket" style="background-color: orange; color: black; white-space: nowrap;">${mwi_common.isZh? "前往市场": "Go to Market"}</button>
+                    <button id="updatePrice" style="background-color: orange; color: black; white-space: nowrap;">${mwi_common.isZh? "更新": "Update"}</button>
+                    <button id="goToMarket" style="background-color: orange; color: black; white-space: nowrap;">${mwi_common.isZh? "前往": "Market"}</button>
                 </div>
             </div>`;
             displayContainer.appendChild(item);
@@ -309,7 +316,7 @@
         const subscribeDisplayContainer = document.createElement("div");
         subscribeDisplayContainer.setAttribute("id", "subscribeDisplayContainer");
         subscribeDisplayContainer.style.display = "grid";
-        subscribeDisplayContainer.style.gridTemplateColumns = "repeat(auto-fill, 320px)";
+        subscribeDisplayContainer.style.gridTemplateColumns = "repeat(auto-fill, 240px)";
         subscribeDisplayContainer.style.gridTemplateRows = "max-content";
         subscribeDisplayContainer.style.gap = "10px";
         subscribeDisplayContainer.style.justifyContent = "center";
