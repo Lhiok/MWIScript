@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWISubscribe
 // @namespace    http://tampermonkey.net/
-// @version      0.10
+// @version      0.11
 // @description  Subscribe Market Item
 // @author       Lhiok
 // @license      MIT
@@ -66,10 +66,10 @@
 
     function getPricePercentColor(pricePercent) {
         if (pricePercent > 0) {
-            return "#00ff00";
+            return "#ff0000";
         }
         else if (pricePercent < 0) {
-            return "#ff0000";
+            return "#00ff00";
         }
         else {
             return "#aaaaaa";
@@ -89,7 +89,7 @@
             const itemInfo = itemHridLevel.split("::");
             const itemHrid = itemInfo[0];
             const itemLevel = itemInfo[1]? Number(itemInfo[1]): 0;
-            if (!itemHrid || itemHrid === "") {
+            if (!itemHrid || itemHrid === "" || itemHrid === "undefined") {
                 return;
             }
 
@@ -243,7 +243,7 @@
                 if (isNaN(itemLevel)) itemLevel = 0;
             }
 
-            itemHridLevel = itemLevel > 0? `${itemHrid}::${itemLevel}`: itemHrid;
+            itemHridLevel = itemHrid && itemLevel > 0? `${itemHrid}::${itemLevel}`: itemHrid;
             isSubscribed = mwi_subscribe_items[itemHridLevel] != undefined;
             updateSubscribedButton();
         }
