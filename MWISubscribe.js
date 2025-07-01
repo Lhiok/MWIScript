@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWISubscribe
 // @namespace    http://tampermonkey.net/
-// @version      0.12
+// @version      0.13
 // @description  Subscribe Market Item
 // @author       Lhiok
 // @license      MIT
@@ -406,6 +406,8 @@
         }
 
         setInterval(addButton, 500);
+        // 监听市场数据变动
+        document.addEventListener(mwi_common.eventNames.marketDataUpdate, updateSubscribedList);
     }
 
     if (window.mwi_common) start();

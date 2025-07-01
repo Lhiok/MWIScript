@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         MWICommon
 // @namespace    http://tampermonkey.net/
-// @version      0.7
+// @version      0.8
 // @description  Common API for MWIScript
 // @author       Lhiok
 // @license      MIT
@@ -59,7 +59,7 @@
         itemNameToHrid: null, // 名称到物品ID
         marketData: null, // 市场数据
         marketDataYesterday: null, // 市场数据昨日
-        nextMarketDataUpdateTime: 0, // 下次市场数据更新时间
+        marketDataInvalidTime: 0, // 市场数据失效时间
     };
 
     /**************************************** Log ****************************************/
@@ -82,6 +82,9 @@
     const marketDataUrl = "https://www.milkywayidle.com/game_data/marketplace.json";
     const marketDataYesterdayUrl = "https://raw.githubusercontent.com/Lhiok/MWIScript/json/marketplace_yesterday.json";
     const langDataUrl = "https://raw.githubusercontent.com/Lhiok/MWIScript/main/lang.json";
+
+    const marketDataStorageKey = "mwi_common_market_data";
+    const marketDataInvalidTimeStorageKey = "mwi_common_market_data_invalid_time";
     
     const eventNames = mwi_common.eventNames = {
         injected: "mwi_common_injected", // 注入完成
@@ -104,6 +107,7 @@
         actionBuffUpdate: "mwi_common_action_buff_update", // 行动加成更新
         newBattle: "mwi_common_new_battle", // 新一轮战斗 单个EPH算一轮
         gotoMarket: "mwi_common_goto_market", // 前往市场
+        marketItemUpdate: "mwi_common_market_item_update", // 市场物品变更
     };
 
     // API调用事件
@@ -127,6 +131,7 @@
         ["handleMessageEquipmentBuffsUpdated"]: [eventNames.actionBuffUpdate],
         ["handleMessageNewBattle"]: [eventNames.newBattle],
         ["handleGoToMarketplace"]: [eventNames.gotoMarket],
+        ["handleMessageMarketItemOrderBooksUpdated"]: [eventNames.marketItemUpdate],
     };
 
     /**
@@ -180,7 +185,10 @@
         }
 
         mwi_common.marketData = marketJson.marketData;
-        mwi_common.nextMarketDataUpdateTime = marketJson.timestamp + 6 * 60 * 60;
+        mwi_common.marketDataInvalidTime = marketJson.timestamp + 6 * 60 * 60;
+        localStorage.setItem(marketDataStorageKey, JSON.stringify(mwi_common.marketData));
+        localStorage.setItem(marketDataInvalidTimeStorageKey, mwi_common.marketDataInvalidTime);
+
         info("market data loaded");
         return true;
     }
@@ -210,11 +218,11 @@
             return;
         }
 
-        const currentSec = new Date().getTime() / 1000;
-        if (mwi_common.nextMarketDataUpdateTime && currentSec < mwi_common.nextMarketDataUpdateTime) return;
+        const currentSec = Date.now() / 1000;
+        if (mwi_common.marketDataInvalidTime && currentSec < mwi_common.marketDataInvalidTime) return;
 
         // 防止同时间多次请求
-        mwi_common.nextMarketDataUpdateTime = currentSec + 5 * 60;
+        mwi_common.marketDataInvalidTime = currentSec + 5 * 60;
 
         // 昨日数据不是特别重要 拉取今日数据时顺带加载
         loadMarketDataYesterday();
@@ -234,15 +242,56 @@
         }
 
         // 市场数据更新存在随机性 未更新推迟15分钟
-        if (mwi_common.nextMarketDataUpdateTime <= currentSec) {
+        if (mwi_common.marketDataInvalidTime <= currentSec) {
             info("market data update delayed");
-            mwi_common.nextMarketDataUpdateTime = currentSec + 15 * 60;
+            mwi_common.marketDataInvalidTime = currentSec + 15 * 60;
+            localStorage.setItem(marketDataInvalidTimeStorageKey, mwi_common.marketDataInvalidTime);
             return;
         }
         
         mwi_common.addNotification(mwi_common.isZh? "市场数据已更新": "Market data updated", false);
         document.dispatchEvent(new CustomEvent(eventNames.marketDataUpdate));
     }
+
+    document.addEventListener(eventNames.marketItemUpdate, (evt) => {
+        if (!mwi_common.marketDataLoaded || !mwi_common.marketData) {
+            return;
+        }
+        
+        if (!evt || !evt.detail || !evt.detail[0]) {
+            return;
+        }
+
+        const marketItemOrderBooks = evt.detail[0].marketItemOrderBooks;
+        if (!marketItemOrderBooks) {
+            return;
+        }
+
+        const itemHrid = marketItemOrderBooks.itemHrid;
+        const orderBooks = marketItemOrderBooks.orderBooks;
+        if (!itemHrid || itemHrid === "" || !orderBooks || !orderBooks.length) {
+            return;
+        }
+
+        let itemMarketData = mwi_common.marketData[itemHrid];
+        if (!itemMarketData) {
+            itemMarketData = {};
+            mwi_common.marketData[itemHrid] = itemMarketData;
+        }
+
+        orderBooks.forEach((orderBook, level) => {
+            let itemLevelMarketData = itemMarketData[level];
+            if (!itemLevelMarketData) {
+                itemLevelMarketData = { a: -1, b: -1 };
+                itemMarketData[level] = itemLevelMarketData;
+            }
+            orderBook.asks && orderBook.asks[0] && (itemLevelMarketData.a = orderBook.asks[0].price);
+            orderBook.bids && orderBook.bids[0] && (itemLevelMarketData.b = orderBook.bids[0].price);
+        });
+
+        localStorage.setItem(marketDataStorageKey, JSON.stringify(mwi_common.marketData));
+        document.dispatchEvent(new CustomEvent(eventNames.marketDataUpdate));
+    });
 
     /**************************************** Public ****************************************/
 
@@ -637,8 +686,8 @@
     
     /**************************************** 初始化官方市场数据 ****************************************/
 
-    async function initMarketData(retryCount = 0) {
-        info(retryCount? `retry to init market data ${retryCount}`: "init market data");
+    async function requestMarketData(retryCount = 0) {
+        retryCount && info(`retry to request market data ${retryCount}`);
         marketDataRetryTimeoutId = 0;
 
         if (!await loadMarketData()) {
@@ -653,6 +702,36 @@
         mwi_common.marketDataLoaded = true;
         mwi_common.addNotification(mwi_common.isZh? "市场数据已加载": "Market data loaded", false);
         document.dispatchEvent(new CustomEvent(eventNames.marketDataLoaded));
+    }
+
+    async function initMarketData() {
+        try {
+            info("init market data");
+
+            const storageInvalidTime = localStorage.getItem(marketDataInvalidTimeStorageKey);
+            const marketDataInvalidTime = storageInvalidTime? parseInt(storageInvalidTime): 0;
+            if (!marketDataInvalidTime || Date.now() / 1000 >= marketDataInvalidTime) {
+                requestMarketData();
+                return;
+            }
+
+            const storageMarketData = localStorage.getItem(marketDataStorageKey);
+            const marketData = storageMarketData? JSON.parse(storageMarketData): null;
+            if (!marketData) {
+                requestMarketData();
+                return;
+            }
+
+            mwi_common.marketData = marketData;
+            mwi_common.marketDataInvalidTime = marketDataInvalidTime;
+            mwi_common.marketDataLoaded = true;
+            mwi_common.addNotification(mwi_common.isZh? "市场数据已加载": "Market data loaded", false);
+            document.dispatchEvent(new CustomEvent(eventNames.marketDataLoaded));
+        }
+        catch (err) {
+            error("failed to init market data: " + err);
+            requestMarketData();
+        }
     }
 
     initMarketData();
